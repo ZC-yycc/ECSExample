@@ -463,7 +463,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ECSExample.FollowerSpawnerAuthoring
   follower_count_: 10000
-  move_speed_: 5
+  move_speed_: 2
   spawn_radius_: 50
   follower_prefab_: {fileID: 6604560787849283924, guid: f21b6a0feaf063d4b83942d9248e9d31, type: 3}
 --- !u!4 &1972865093

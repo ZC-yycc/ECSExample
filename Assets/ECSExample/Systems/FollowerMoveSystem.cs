@@ -23,7 +23,7 @@ namespace ECSExample
         // 分离参数                 
         private const float                     MIN_SEPARATION = 3.0f;      // 最小间距
         private const float                     SEPARATION_WEIGHT = 8.0f;    // 分离力权重
-        private const float                     SEPARATION_CELL = 4.0f;      // 分离格子大小
+        private const float                     SEPARATION_CELL = 2.0f;      // 分离格子大小
         private const float                     SLOW_RADIUS = 4.0f;          // 到达减速半径
         private const float                     STOP_RADIUS = 2.0f;          // 停止半径
         private const float                     MAX_SPEED = 8f;              // 最大速度限制
