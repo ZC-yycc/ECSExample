@@ -5,6 +5,7 @@
 ## 运行效果
 
 - 玩家使用 WASD 移动
+- 摄像机自动跟随玩家位置
 - 跟随者从场景各处沿流场方向向玩家靠拢
 - 接近玩家时自动减速
 - 距玩家 2 米内停止，彼此通过分离力保持间距
@@ -14,6 +15,7 @@
 ```
 Assets/ECSExample/
 ├── Components/          # ECS 组件定义
+│   ├── CameraFollowConfig.cs   # 摄像机跟随偏移配置（Singleton）
 │   ├── FlowFieldGrid.cs         # 流场网格配置 + 格子方向 Buffer
 │   ├── FollowerData.cs          # 跟随者移动数据
 │   ├── FollowerSpawnConfig.cs   # 生成配置（Singleton）
@@ -21,12 +23,14 @@ Assets/ECSExample/
 │   ├── PlayerData.cs            # 玩家移动速度
 │   └── PlayerTag.cs             # 玩家标记
 ├── Systems/             # ECS 系统
+│   ├── CameraFollowSystem.cs    # 摄像机跟随玩家
 │   ├── FlowFieldBuildSystem.cs  # 构建流场（每 0.3s 重建）
 │   ├── FollowerSpawnSystem.cs   # 批量生成跟随者
 │   ├── FollowerMoveSystem.cs    # 核心移动逻辑
 │   ├── FollowerDebugDrawSystem.cs# Scene View 调试绘制
 │   └── PlayerMoveSystem.cs      # WASD 控制玩家
 └── Authoring/           # MonoBehaviour → ECS 转换
+    ├── CameraFollowAuthoring.cs  # 摄像机跟随配置
     ├── FlowFieldConfigAuthoring.cs  # 流场参数配置
     ├── FollowerSpawnerAuthoring.cs  # 生成参数配置
     ├── FollowerTemplateAuthoring.cs # 跟随者模板（Prefab）
@@ -53,7 +57,8 @@ SimulationSystemGroup:
   4. FollowerMoveSystem      (每帧更新所有跟随者位置)
 
 PresentationSystemGroup:
-  5. FollowerDebugDrawSystem (Scene View 调试绘制)
+  5. CameraFollowSystem      (摄像机跟随 Player 位置)
+  6. FollowerDebugDrawSystem (Scene View 调试绘制)
 ```
 
 ## 核心算法
@@ -83,6 +88,16 @@ separation = Σ (远离方向 × strength) / N
 final_dir  = normalize(flow_dir + separation × 8.0)
 ```
 
+### 摄像机跟随（CameraFollowSystem）
+
+每帧在 `PresentationSystemGroup` 中运行，读取 Player 的 `LocalTransform` 和 `CameraFollowConfig` 偏移量，将主摄像机移动到：
+
+```
+camera.position = player.position + offset
+```
+
+默认偏移 `(0, 15, -10)`，可在 `CameraFollowAuthoring` 的 Inspector 中调整。
+
 ### 移动控制参数
 
 | 参数 | 值 | 说明 |
@@ -97,6 +112,7 @@ final_dir  = normalize(flow_dir + separation × 8.0)
 
 | 组件 | 类型 | 说明 |
 |------|------|------|
+| `CameraFollowConfig` | `IComponentData` (Singleton) | 摄像机跟随偏移量 `offset` |
 | `FlowFieldGridConfig` | `IComponentData` (Singleton) | 网格宽高、格子大小、原点、重建间隔 |
 | `FlowFieldCellBuffer` | `IBufferElementData` | 每个格子的 `float2` 方向向量 |
 | `FollowerData` | `IComponentData` | `move_speed` |
@@ -111,9 +127,11 @@ final_dir  = normalize(flow_dir + separation × 8.0)
    - 空物体挂 `FollowerSpawnerAuthoring`（生成参数）
    - Cube 挂 `FollowerTemplateAuthoring`（跟随者模板，拖入 Spawner 的 Prefab 字段）
    - 玩家物体挂 `PlayerAuthoring`
+   - 空物体挂 `CameraFollowAuthoring`（摄像机跟随偏移，调整 `offset` 可改变摄像机位置）
 2. 确保使用 **URP** 渲染管线
-3. 运行，WASD 移动玩家，观察跟随者行为
-4. Scene View 中每 30 帧会绘制跟随者位置标记（绿线）
+3. 确保场景中有一个 **Main Camera**（Tag 为 `MainCamera`）
+4. 运行，WASD 移动玩家，摄像机会自动跟随
+5. Scene View 中每 30 帧会绘制跟随者位置标记（绿线）
 
 ## 技术要点
 
