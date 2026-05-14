@@ -41,6 +41,8 @@
 
 # Visual Studio cache directory
 .vs/
+.vscode/
+.deepseek/
 
 # Gradle cache directory
 .gradle/

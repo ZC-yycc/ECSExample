@@ -11,7 +11,7 @@ GameObject:
   - component: {fileID: 3155081165718547095}
   - component: {fileID: 249664851500479567}
   - component: {fileID: 8210337335867269045}
-  - component: {fileID: 7465146358377901886}
+  - component: {fileID: 6153809594819552924}
   m_Layer: 0
   m_Name: FollowerPrefab
   m_TagString: Untagged
@@ -91,7 +91,7 @@ MeshRenderer:
   m_SortingOrder: 0
   m_MaskInteraction: 0
   m_AdditionalVertexStreams: {fileID: 0}
---- !u!114 &7465146358377901886
+--- !u!114 &6153809594819552924
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
