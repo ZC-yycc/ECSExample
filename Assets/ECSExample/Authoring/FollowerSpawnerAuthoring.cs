@@ -10,7 +10,7 @@ namespace ECSExample
         public float                            move_speed_ = 5f;
         public float                            spawn_radius_ = 50f;
 
-        [Header("模板引用（首选方案）")]
+        [Header("模板引用")]
         [Tooltip("SubScene 中挂有 FollowerTemplateAuthoring 的 GameObject")]
         public GameObject                       follower_prefab_;
 
@@ -25,6 +25,10 @@ namespace ECSExample
                 {
                     DependsOn(authoring.follower_prefab_);
                     prefab_entity = GetEntity(authoring.follower_prefab_, TransformUsageFlags.Dynamic);
+                }
+                else
+                {
+                    Debug.LogWarning($"[FollowerSpawnerAuthoring] 未设置 follower_prefab_，生成的 Follower 将无法显示");
                 }
 
                 AddComponent(entity, new FollowerSpawnConfig
