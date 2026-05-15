@@ -17,7 +17,7 @@ namespace ECSExample
         private EntityQuery player_query;
 
         private const float MIN_SEPARATION = 3.0f;
-        private const float SEPARATION_WEIGHT = 8.0f;
+        private const float SEPARATION_WEIGHT = 3.0f;
         private const float SEPARATION_CELL = 2.0f;
         private const float SLOW_RADIUS = 4.0f;
         private const float STOP_RADIUS = 2.0f;
@@ -165,7 +165,7 @@ namespace ECSExample
                         if (dist_sq < min_separation * min_separation && dist_sq > 0.00001f)
                         {
                             float dist = math.sqrt(dist_sq);
-                            separation += (diff / dist) * ((min_separation - dist) / min_separation);
+                            separation += diff / dist * ((min_separation - dist) / min_separation);
                             neighbor_count++;
                         }
                     } while (spatial_grid.TryGetNextValue(out other, ref iter));
