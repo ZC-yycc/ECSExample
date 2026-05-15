@@ -12,16 +12,16 @@ namespace ECSExample
     [UpdateAfter(typeof(CostFieldBuildSystem))]
     public partial struct FollowerMoveSystem : ISystem
     {
-        private EntityQuery config_query;
-        private EntityQuery follower_query;
-        private EntityQuery player_query;
+        private EntityQuery                         config_query;
+        private EntityQuery                         follower_query;
+        private EntityQuery                         player_query;
 
-        private const float MIN_SEPARATION = 3.0f;
-        private const float SEPARATION_WEIGHT = 3.0f;
-        private const float SEPARATION_CELL = 2.0f;
-        private const float SLOW_RADIUS = 4.0f;
-        private const float STOP_RADIUS = 2.0f;
-        private const float MAX_SPEED = 8f;
+        private const float                         MIN_SEPARATION = 3.0f;
+        private const float                         SEPARATION_WEIGHT = 3.0f;
+        private const float                         SEPARATION_CELL = 2.0f;
+        private const float                         SLOW_RADIUS = 4.0f;
+        private const float                         STOP_RADIUS = 2.0f;
+        private const float                         MAX_SPEED = 8f;
 
         public void OnCreate(ref SystemState state)
         {
@@ -95,17 +95,26 @@ namespace ECSExample
     [BurstCompile]
     public partial struct FollowerMoveJob : IJobEntity
     {
-        [ReadOnly] public NativeParallelMultiHashMap<int, Entity> spatial_grid;
+        [ReadOnly] public NativeParallelMultiHashMap<int, Entity>               spatial_grid;
         [ReadOnly, NativeDisableContainerSafetyRestriction] public ComponentLookup<LocalTransform> transform_lookup;
-        [ReadOnly] public NativeArray<CostFieldCellBuffer> cell_buffer;
-        [ReadOnly] public NativeArray<ObstacleMaskElement> mask_buffer;
+        [ReadOnly] public NativeArray<CostFieldCellBuffer>                      cell_buffer;
+        [ReadOnly] public NativeArray<ObstacleMaskElement>                      mask_buffer;
 
-        public int flow_grid_width, flow_grid_height;
-        public float flow_cell_size; public float3 flow_grid_origin;
-        public float sep_cell_size; public int sep_grid_width, sep_grid_height; public float3 sep_grid_origin;
-        public float min_separation, separation_weight;
-        public float slow_radius, stop_radius, max_speed;
-        public float3 player_position; public float delta_time;
+        public int                                              flow_grid_width;
+        public int                                              flow_grid_height;
+        public float                                            flow_cell_size;
+        public float3                                           flow_grid_origin;
+        public float                                            sep_cell_size; 
+        public int                                              sep_grid_width;
+        public int                                              sep_grid_height;
+        public float3                                           sep_grid_origin;
+        public float                                            min_separation;
+        public float                                            separation_weight;
+        public float                                            slow_radius;
+        public float                                            max_speed;
+        public float                                            stop_radius;
+        public float3                                           player_position; 
+        public float                                            delta_time;
 
         public void Execute(Entity entity, ref LocalTransform transform, in FollowerData follower)
         {

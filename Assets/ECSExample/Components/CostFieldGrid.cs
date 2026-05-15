@@ -16,13 +16,13 @@ namespace ECSExample
     /// </summary>
     public struct CostFieldGridConfig : IComponentData
     {
-        public int grid_width;
-        public int grid_height;
-        public float cell_size;
-        public float3 grid_origin;
-        public float rebuild_interval;
-        public double last_rebuild_time;
+        public int                                      grid_width;
+        public int                                      grid_height;
+        public float                                    cell_size;
+        public float3                                   grid_origin;
+        public float                                    rebuild_interval;
+        public double                                   last_rebuild_time;
         /// <summary>障碍物检测 Layer（位掩码）</summary>
-        public int obstacle_layer_mask;
+        public int                                      obstacle_layer_mask;
     }
 }

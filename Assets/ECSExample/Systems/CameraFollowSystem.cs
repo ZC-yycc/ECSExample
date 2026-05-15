@@ -12,8 +12,8 @@ namespace ECSExample
     [UpdateInGroup(typeof(PresentationSystemGroup))]
     public partial struct CameraFollowSystem : ISystem
     {
-        private EntityQuery player_query;
-        private bool camera_missing_logged;
+        private EntityQuery             player_query;
+        private bool                    camera_missing_logged;
 
         public void OnCreate(ref SystemState state)
         {

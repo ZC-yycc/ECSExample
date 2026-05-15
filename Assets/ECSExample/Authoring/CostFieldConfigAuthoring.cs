@@ -10,16 +10,16 @@ namespace ECSExample
     public class CostFieldConfigAuthoring : MonoBehaviour
     {
         [Header("网格参数")]
-        public int grid_width_ = 100;
-        public int grid_height_ = 100;
-        public float cell_size_ = 1f;
+        public int                                      grid_width_ = 100;
+        public int                                      grid_height_ = 100;
+        public float                                    cell_size_ = 1f;
 
         [Header("重建间隔（秒）")]
-        public float rebuild_interval_ = 0.3f;
+        public float                                    rebuild_interval_ = 0.3f;
 
         [Header("障碍物检测")]
         [Tooltip("物理检测的 Layer（例如设为 Obstacle）")]
-        public LayerMask obstacle_layer_ = -1;
+        public LayerMask                                obstacle_layer_ = -1;
 
         class Baker : Baker<CostFieldConfigAuthoring>
         {

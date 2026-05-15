@@ -11,11 +11,11 @@ namespace ECSExample
     [UpdateInGroup(typeof(PresentationSystemGroup))]
     public partial struct CostFieldDebugDrawSystem : ISystem
     {
-        private EntityQuery config_query;
-        private EntityQuery player_query;
+        private EntityQuery                                     config_query;
+        private EntityQuery                                     player_query;
 
-        private const float ARROW_SCALE = 0.7f;
-        private const int CIRCLE_SEGMENTS = 24;
+        private const float                                     ARROW_SCALE = 0.7f;
+        private const int                                       CIRCLE_SEGMENTS = 24;
 
         public void OnCreate(ref SystemState state)
         {
