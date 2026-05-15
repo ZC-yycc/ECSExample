@@ -10,18 +10,18 @@ using Unity.Collections.LowLevel.Unsafe;
 namespace ECSExample
 {
     /// <summary>
-    /// Follower 移动系统：流场方向 + 空间哈希分离 + 障碍物避让 + 到达减速
+    /// Follower 移动系统：代价场梯度下降 + 空间哈希分离 + 障碍物避让 + 到达减速
     /// </summary>
     [UpdateInGroup(typeof(SimulationSystemGroup))]
-    [UpdateAfter(typeof(FlowFieldBuildSystem))]
+    [UpdateAfter(typeof(CostFieldBuildSystem))]
     public partial struct FollowerMoveSystem : ISystem
     {
         private EntityQuery                     config_query;
         private EntityQuery                     follower_query;
         private EntityQuery                     player_query;
         private EntityQuery                     obstacle_query;
-                    
-        // 分离参数                 
+
+        // 分离参数
         private const float                     MIN_SEPARATION = 3.0f;      // 最小间距
         private const float                     SEPARATION_WEIGHT = 8.0f;    // 分离力权重
         private const float                     SEPARATION_CELL = 2.0f;      // 分离格子大小
@@ -37,7 +37,7 @@ namespace ECSExample
         public void OnCreate(ref SystemState state)
         {
             config_query = SystemAPI.QueryBuilder()
-                .WithAll<FlowFieldGridConfig>()
+                .WithAll<CostFieldGridConfig>()
                 .Build();
             follower_query = SystemAPI.QueryBuilder()
                 .WithAll<FollowerData, LocalTransform>()
@@ -58,7 +58,7 @@ namespace ECSExample
         {
             if (follower_query.IsEmpty) return;
 
-            var config = SystemAPI.GetSingleton<FlowFieldGridConfig>();
+            var config = SystemAPI.GetSingleton<CostFieldGridConfig>();
             int follower_count = follower_query.CalculateEntityCount();
             if (follower_count == 0) return;
 
@@ -106,9 +106,9 @@ namespace ECSExample
                 obs_fill_handle = obs_fill_job.ScheduleParallel(obstacle_query, fill_handle);
             }
 
-            // ── 流场 Buffer ──
-            var singleton_entity = SystemAPI.GetSingletonEntity<FlowFieldGridConfig>();
-            var cell_buffer = SystemAPI.GetBuffer<FlowFieldCellBuffer>(singleton_entity);
+            // ── 代价场 Buffer ──
+            var singleton_entity = SystemAPI.GetSingletonEntity<CostFieldGridConfig>();
+            var cell_buffer = SystemAPI.GetBuffer<CostFieldCellBuffer>(singleton_entity);
             var transform_lookup = SystemAPI.GetComponentLookup<LocalTransform>(true);
 
             // ── 移动 Job ──
@@ -192,7 +192,7 @@ namespace ECSExample
         }
     }
 
-    // ──────────────── 移动 + 分离 + 避让 Job ────────────────
+    // ──────────────── 移动 + 梯度下降 + 分离 + 避让 Job ────────────────
     [BurstCompile]
     public partial struct FollowerMoveJob : IJobEntity
     {
@@ -203,9 +203,9 @@ namespace ECSExample
         public ComponentLookup<LocalTransform>                              transform_lookup;
         [ReadOnly, NativeDisableContainerSafetyRestriction]
         public ComponentLookup<ObstacleData>                                obstacle_data_lookup;
-        [ReadOnly] public NativeArray<FlowFieldCellBuffer>                  cell_buffer;
+        [ReadOnly] public NativeArray<CostFieldCellBuffer>                  cell_buffer;
 
-        // 流场参数
+        // 代价场参数
         public int                                      flow_grid_width;
         public int                                      flow_grid_height;
         public float                                    flow_cell_size;
@@ -244,13 +244,51 @@ namespace ECSExample
             if (math.distance(my_pos, player_position) < stop_radius)
                 return;
 
-            // ── 1. 流场方向 ──
+            // ── 1. 代价场梯度下降 ──
+            // 查找当前格及 8 邻格中代价最小的格子，朝其中心移动
             float3 flow_relative = my_pos - flow_grid_origin;
             int flow_cx = math.clamp((int)(flow_relative.x / flow_cell_size), 0, flow_grid_width - 1);
             int flow_cz = math.clamp((int)(flow_relative.z / flow_cell_size), 0, flow_grid_height - 1);
-            int flow_index = flow_cz * flow_grid_width + flow_cx;
-            float2 flow_dir = cell_buffer[flow_index].direction;
-            float3 move_dir = new float3(flow_dir.x, 0f, flow_dir.y);
+
+            float best_cost = float.MaxValue;
+            int best_nx = flow_cx;
+            int best_nz = flow_cz;
+
+            // 检查 3×3 邻域（含当前格），找最小代价
+            for (int dx = -1; dx <= 1; dx++)
+            {
+                for (int dz = -1; dz <= 1; dz++)
+                {
+                    int nx = flow_cx + dx;
+                    int nz = flow_cz + dz;
+                    if (nx < 0 || nx >= flow_grid_width || nz < 0 || nz >= flow_grid_height)
+                        continue;
+
+                    float cost = cell_buffer[nz * flow_grid_width + nx].cost;
+                    if (cost < best_cost)
+                    {
+                        best_cost = cost;
+                        best_nx = nx;
+                        best_nz = nz;
+                    }
+                }
+            }
+
+            // 朝最低代价邻居方向移动；若当前格即最优则朝玩家直走
+            float3 move_dir;
+            if (best_nx != flow_cx || best_nz != flow_cz)
+            {
+                float3 target_center = flow_grid_origin + new float3(
+                    (best_nx + 0.5f) * flow_cell_size,
+                    0f,
+                    (best_nz + 0.5f) * flow_cell_size
+                );
+                move_dir = math.normalizesafe(target_center - my_pos, float3.zero);
+            }
+            else
+            {
+                move_dir = math.normalizesafe(player_position - my_pos, float3.zero);
+            }
 
             // ── 2. 空间哈希分离力 ──
             float3 separation = float3.zero;
@@ -356,7 +394,7 @@ namespace ECSExample
             }
             else
             {
-                final_dir = move_dir;  // 分离力为0时回到流场方向
+                final_dir = move_dir;  // 分离力为0时回到代价场方向
             }
 
             // ── 5. 到达减速 ──

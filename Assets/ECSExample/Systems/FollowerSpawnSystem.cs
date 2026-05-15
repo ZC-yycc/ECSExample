@@ -7,7 +7,7 @@ using UnityEngine;
 namespace ECSExample
 {
     [UpdateInGroup(typeof(SimulationSystemGroup))]
-    [UpdateBefore(typeof(FlowFieldBuildSystem))]
+    [UpdateBefore(typeof(CostFieldBuildSystem))]
     public partial struct FollowerSpawnSystem : ISystem
     {
         private bool has_spawned;

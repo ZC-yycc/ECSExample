@@ -4,17 +4,19 @@ using Unity.Mathematics;
 namespace ECSExample
 {
     /// <summary>
-    /// 流场单元格方向数据（Buffer Element）
+    /// 代价场单元格数据（Buffer Element）
+    /// 存储从该格子到目标的距离代价（值越小越接近目标）
     /// </summary>
-    public struct FlowFieldCellBuffer : IBufferElementData
+    public struct CostFieldCellBuffer : IBufferElementData
     {
-        public float2                       direction;
+        /// <summary>到达目标的累计距离代价</summary>
+        public float                        cost;
     }
 
     /// <summary>
-    /// 流场网格配置（Singleton Component）
+    /// 代价场网格配置（Singleton Component）
     /// </summary>
-    public struct FlowFieldGridConfig : IComponentData
+    public struct CostFieldGridConfig : IComponentData
     {
         public int                          grid_width;
         public int                          grid_height;

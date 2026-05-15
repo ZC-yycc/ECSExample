@@ -7,12 +7,12 @@ using Unity.Collections;
 namespace ECSExample
 {
     /// <summary>
-    /// 从 Player 位置构建流场（Flow Field）
-    /// 所有格子存储指向 Player 的方向向量
+    /// 代价场构建系统：以 Player 位置为零代价源点，通过波前传播计算每个格子的距离代价。
+    /// 代价 = 从源点沿网格曼哈顿路径到达该格子的累计距离。
     /// </summary>
     [UpdateInGroup(typeof(SimulationSystemGroup))]
     [UpdateAfter(typeof(PlayerMoveSystem))]
-    public partial struct FlowFieldBuildSystem : ISystem
+    public partial struct CostFieldBuildSystem : ISystem
     {
         private EntityQuery                     config_query;
         private EntityQuery                     player_query;
@@ -20,7 +20,7 @@ namespace ECSExample
         public void OnCreate(ref SystemState state)
         {
             config_query = SystemAPI.QueryBuilder()
-                .WithAll<FlowFieldGridConfig>()
+                .WithAll<CostFieldGridConfig>()
                 .Build();
             player_query = SystemAPI.QueryBuilder()
                 .WithAll<PlayerTag, LocalTransform>()
@@ -31,7 +31,7 @@ namespace ECSExample
         [BurstCompile]
         public void OnUpdate(ref SystemState state)
         {
-            var config = SystemAPI.GetSingletonRW<FlowFieldGridConfig>();
+            var config = SystemAPI.GetSingletonRW<CostFieldGridConfig>();
 
             double current_time = SystemAPI.Time.ElapsedTime;
             if (current_time - config.ValueRO.last_rebuild_time < config.ValueRO.rebuild_interval)
@@ -46,35 +46,82 @@ namespace ECSExample
             var player_transform = player_query.GetSingleton<LocalTransform>();
             float3 player_pos = player_transform.Position;
 
-            // 获取流场 Buffer
-            var singleton_entity = SystemAPI.GetSingletonEntity<FlowFieldGridConfig>();
-            var cell_buffer = SystemAPI.GetBuffer<FlowFieldCellBuffer>(singleton_entity);
+            // 获取代价场 Buffer
+            var singleton_entity = SystemAPI.GetSingletonEntity<CostFieldGridConfig>();
+            var cell_buffer = SystemAPI.GetBuffer<CostFieldCellBuffer>(singleton_entity);
 
-            int grid_width = config.ValueRO.grid_width;
-            int grid_height = config.ValueRO.grid_height;
-            float cell_size = config.ValueRO.cell_size;
-            float3 grid_origin = config.ValueRO.grid_origin;
+            int gw = config.ValueRO.grid_width;
+            int gh = config.ValueRO.grid_height;
+            float cs = config.ValueRO.cell_size;
+            float3 origin = config.ValueRO.grid_origin;
 
-            int total_cells = grid_width * grid_height;
+            int total_cells = gw * gh;
             cell_buffer.Resize(total_cells, NativeArrayOptions.UninitializedMemory);
 
-            // 构建方向场：每个格子方向 = normalize(Player位置 - 格子中心)
-            for (int j = 0; j < grid_height; j++)
+            // ── 1. 初始化所有格子代价为极大值 ──
+            for (int i = 0; i < total_cells; i++)
             {
-                for (int i = 0; i < grid_width; i++)
+                cell_buffer[i] = new CostFieldCellBuffer { cost = float.MaxValue };
+            }
+
+            // ── 2. Player 所在格子代价设为 0 ──
+            float3 player_relative = player_pos - origin;
+            int pcx = math.clamp((int)(player_relative.x / cs), 0, gw - 1);
+            int pcz = math.clamp((int)(player_relative.z / cs), 0, gh - 1);
+            cell_buffer[pcz * gw + pcx] = new CostFieldCellBuffer { cost = 0f };
+
+            // ── 3. 波前传播（迭代松弛） ──
+            // 每个格子的代价 = min(自身, 邻居代价 + cell_size)
+            // 最多迭代 (gw + gh) 次保证覆盖整张网格
+            int max_passes = gw + gh;
+            for (int pass = 0; pass < max_passes; pass++)
+            {
+                bool changed = false;
+
+                for (int j = 0; j < gh; j++)
                 {
-                    int index = j * grid_width + i;
-                    float3 cell_center = grid_origin + new float3(
-                        (i + 0.5f) * cell_size,
-                        0f,
-                        (j + 0.5f) * cell_size
-                    );
-                    float2 dir = math.normalizesafe(
-                        new float2(player_pos.x - cell_center.x, player_pos.z - cell_center.z),
-                        float2.zero
-                    );
-                    cell_buffer[index] = new FlowFieldCellBuffer { direction = dir };
+                    for (int i = 0; i < gw; i++)
+                    {
+                        int idx = j * gw + i;
+                        float current = cell_buffer[idx].cost;
+
+                        float best_neighbor = current;
+
+                        // 左
+                        if (i > 0)
+                        {
+                            float nc = cell_buffer[j * gw + (i - 1)].cost + cs;
+                            if (nc < best_neighbor) best_neighbor = nc;
+                        }
+                        // 右
+                        if (i < gw - 1)
+                        {
+                            float nc = cell_buffer[j * gw + (i + 1)].cost + cs;
+                            if (nc < best_neighbor) best_neighbor = nc;
+                        }
+                        // 下（z-）
+                        if (j > 0)
+                        {
+                            float nc = cell_buffer[(j - 1) * gw + i].cost + cs;
+                            if (nc < best_neighbor) best_neighbor = nc;
+                        }
+                        // 上（z+）
+                        if (j < gh - 1)
+                        {
+                            float nc = cell_buffer[(j + 1) * gw + i].cost + cs;
+                            if (nc < best_neighbor) best_neighbor = nc;
+                        }
+
+                        if (best_neighbor < current - 0.0001f)
+                        {
+                            cell_buffer[idx] = new CostFieldCellBuffer { cost = best_neighbor };
+                            changed = true;
+                        }
+                    }
                 }
+
+                // 收敛则提前退出
+                if (!changed) break;
             }
         }
     }

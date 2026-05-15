@@ -5,9 +5,9 @@ using UnityEngine;
 namespace ECSExample
 {
     /// <summary>
-    /// 流场配置 Authoring：挂载到场景空物体上
+    /// 代价场配置 Authoring：挂载到场景空物体上
     /// </summary>
-    public class FlowFieldConfigAuthoring : MonoBehaviour
+    public class CostFieldConfigAuthoring : MonoBehaviour
     {
         [Header("网格参数")]
         public int                          grid_width_ = 100;
@@ -17,9 +17,9 @@ namespace ECSExample
         [Header("重建间隔（秒）")]
         public float                        rebuild_interval_ = 0.3f;
 
-        class Baker : Baker<FlowFieldConfigAuthoring>
+        class Baker : Baker<CostFieldConfigAuthoring>
         {
-            public override void Bake(FlowFieldConfigAuthoring authoring)
+            public override void Bake(CostFieldConfigAuthoring authoring)
             {
                 var entity = GetEntity(TransformUsageFlags.None);
 
@@ -29,7 +29,7 @@ namespace ECSExample
                     -authoring.grid_height_ * authoring.cell_size_ * 0.5f
                 );
 
-                AddComponent(entity, new FlowFieldGridConfig
+                AddComponent(entity, new CostFieldGridConfig
                 {
                     grid_width = authoring.grid_width_,
                     grid_height = authoring.grid_height_,
@@ -39,10 +39,10 @@ namespace ECSExample
                     last_rebuild_time = 0.0
                 });
 
-                var buffer = AddBuffer<FlowFieldCellBuffer>(entity);
+                var buffer = AddBuffer<CostFieldCellBuffer>(entity);
                 buffer.Resize(authoring.grid_width_ * authoring.grid_height_, Unity.Collections.NativeArrayOptions.ClearMemory);
 
-                Debug.Log($"[FlowFieldConfigAuthoring] 流场 Entity: {entity}, " +
+                Debug.Log($"[CostFieldConfigAuthoring] 代价场 Entity: {entity}, " +
                     $"grid={authoring.grid_width_}x{authoring.grid_height_}, " +
                     $"cell={authoring.cell_size_}m, origin={origin}");
             }
