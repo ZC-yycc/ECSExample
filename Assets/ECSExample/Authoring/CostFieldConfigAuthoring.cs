@@ -10,12 +10,16 @@ namespace ECSExample
     public class CostFieldConfigAuthoring : MonoBehaviour
     {
         [Header("网格参数")]
-        public int                          grid_width_ = 100;
-        public int                          grid_height_ = 100;
-        public float                        cell_size_ = 1f;
+        public int grid_width_ = 100;
+        public int grid_height_ = 100;
+        public float cell_size_ = 1f;
 
         [Header("重建间隔（秒）")]
-        public float                        rebuild_interval_ = 0.3f;
+        public float rebuild_interval_ = 0.3f;
+
+        [Header("障碍物检测")]
+        [Tooltip("物理检测的 Layer（例如设为 Obstacle）")]
+        public LayerMask obstacle_layer_ = -1;
 
         class Baker : Baker<CostFieldConfigAuthoring>
         {
@@ -36,15 +40,21 @@ namespace ECSExample
                     cell_size = authoring.cell_size_,
                     grid_origin = origin,
                     rebuild_interval = authoring.rebuild_interval_,
-                    last_rebuild_time = 0.0
+                    last_rebuild_time = 0.0,
+                    obstacle_layer_mask = authoring.obstacle_layer_.value
                 });
 
-                var buffer = AddBuffer<CostFieldCellBuffer>(entity);
-                buffer.Resize(authoring.grid_width_ * authoring.grid_height_, Unity.Collections.NativeArrayOptions.ClearMemory);
+                var cell_buffer = AddBuffer<CostFieldCellBuffer>(entity);
+                cell_buffer.Resize(authoring.grid_width_ * authoring.grid_height_,
+                    Unity.Collections.NativeArrayOptions.ClearMemory);
 
-                Debug.Log($"[CostFieldConfigAuthoring] 代价场 Entity: {entity}, " +
-                    $"grid={authoring.grid_width_}x{authoring.grid_height_}, " +
-                    $"cell={authoring.cell_size_}m, origin={origin}");
+                var mask_buffer = AddBuffer<ObstacleMaskElement>(entity);
+                mask_buffer.Resize(authoring.grid_width_ * authoring.grid_height_,
+                    Unity.Collections.NativeArrayOptions.ClearMemory);
+
+                Debug.Log($"[CostFieldConfigAuthoring] Entity: {entity} " +
+                    $"grid={authoring.grid_width_}x{authoring.grid_height_} " +
+                    $"cell={authoring.cell_size_}m layer={authoring.obstacle_layer_.value}");
             }
         }
     }

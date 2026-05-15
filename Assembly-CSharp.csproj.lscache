@@ -52,26 +52,25 @@ TemporaryDependencyNodeTargetIdentifier=netstandard2.1
 [sourceFiles]
 Assets/ECSExample/Authoring/
  CameraFollowAuthoring.cs
- FlowFieldConfigAuthoring.cs
+ CostFieldConfigAuthoring.cs
  FollowerSpawnerAuthoring.cs
  FollowerTemplateAuthoring.cs
- ObstacleAuthoring.cs
  PlayerAuthoring.cs
 Assets/ECSExample/Components/
  CameraFollowConfig.cs
- FlowFieldGrid.cs
+ CostFieldGrid.cs
  FollowerData.cs
  FollowerSpawnConfig.cs
- ObstacleData.cs
- ObstacleTag.cs
+ ObstacleMask.cs
  PlayerData.cs
  PlayerTag.cs
 Assets/ECSExample/Systems/
  CameraFollowSystem.cs
- FlowFieldBuildSystem.cs
- FlowFieldDebugDrawSystem.cs
+ CostFieldBuildSystem.cs
+ CostFieldDebugDrawSystem.cs
  FollowerMoveSystem.cs
  FollowerSpawnSystem.cs
+ ObstacleMaskBuildSystem.cs
  PlayerMoveSystem.cs
 Assets/TutorialInfo/Scripts/Readme.cs
 Temp/obj/Assembly-CSharp/.NETStandard,Version=v2.1.AssemblyAttributes.cs
