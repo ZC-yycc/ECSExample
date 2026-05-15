@@ -8,7 +8,7 @@ namespace ECSExample
 {
     /// <summary>
     /// 从 Player 位置构建流场（Flow Field）
-    /// 所有格子存储指向 Player 的方向向量
+    /// 所有格子存储指向 Player 的方向向量，被静态障碍阻挡的格子方向为零
     /// </summary>
     [UpdateInGroup(typeof(SimulationSystemGroup))]
     [UpdateAfter(typeof(PlayerMoveSystem))]
@@ -49,6 +49,7 @@ namespace ECSExample
             // 获取流场 Buffer
             var singleton_entity = SystemAPI.GetSingletonEntity<FlowFieldGridConfig>();
             var cell_buffer = SystemAPI.GetBuffer<FlowFieldCellBuffer>(singleton_entity);
+            var blocked_buffer = SystemAPI.GetBuffer<FlowFieldBlockedBuffer>(singleton_entity);
 
             int grid_width = config.ValueRO.grid_width;
             int grid_height = config.ValueRO.grid_height;
@@ -59,11 +60,20 @@ namespace ECSExample
             cell_buffer.Resize(total_cells, NativeArrayOptions.UninitializedMemory);
 
             // 构建方向场：每个格子方向 = normalize(Player位置 - 格子中心)
+            // 被静态障碍阻挡的格子 → 方向为零向量
             for (int j = 0; j < grid_height; j++)
             {
                 for (int i = 0; i < grid_width; i++)
                 {
                     int index = j * grid_width + i;
+
+                    // 静态阻挡检查
+                    if (blocked_buffer.Length > index && blocked_buffer[index].blocked)
+                    {
+                        cell_buffer[index] = new FlowFieldCellBuffer { direction = float2.zero };
+                        continue;
+                    }
+
                     float3 cell_center = grid_origin + new float3(
                         (i + 0.5f) * cell_size,
                         0f,

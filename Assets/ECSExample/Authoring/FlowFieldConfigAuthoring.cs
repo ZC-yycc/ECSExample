@@ -39,8 +39,15 @@ namespace ECSExample
                     last_rebuild_time = 0.0
                 });
 
-                var buffer = AddBuffer<FlowFieldCellBuffer>(entity);
-                buffer.Resize(authoring.grid_width_ * authoring.grid_height_, Unity.Collections.NativeArrayOptions.ClearMemory);
+                // 方向 Buffer
+                var cell_buffer = AddBuffer<FlowFieldCellBuffer>(entity);
+                cell_buffer.Resize(authoring.grid_width_ * authoring.grid_height_,
+                    Unity.Collections.NativeArrayOptions.ClearMemory);
+
+                // 静态阻挡标记 Buffer（全部初始为 false）
+                var blocked_buffer = AddBuffer<FlowFieldBlockedBuffer>(entity);
+                blocked_buffer.Resize(authoring.grid_width_ * authoring.grid_height_,
+                    Unity.Collections.NativeArrayOptions.ClearMemory);
 
                 Debug.Log($"[FlowFieldConfigAuthoring] 流场 Entity: {entity}, " +
                     $"grid={authoring.grid_width_}x{authoring.grid_height_}, " +

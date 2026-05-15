@@ -7,7 +7,7 @@ using UnityEngine;
 namespace ECSExample
 {
     /// <summary>
-    /// 调试绘制：Scene View 中可视化流场网格 + 方向箭头（距离渐变） + 障碍物
+    /// 调试绘制：Scene View 中可视化流场网格 + 方向箭头（距离渐变） + 障碍物 + 静态阻挡格子
     /// </summary>
     [UpdateInGroup(typeof(PresentationSystemGroup))]
     public partial struct FlowFieldDebugDrawSystem : ISystem
@@ -107,7 +107,7 @@ namespace ECSExample
                     if (index >= cell_buffer.Length) break;
 
                     float2 dir = cell_buffer[index].direction;
-                    if (math.lengthsq(dir) < 0.0001f) continue;  // 跳过零向量
+                    if (math.lengthsq(dir) < 0.0001f) continue;  // 跳过零向量（含阻挡格子）
 
                     float3 cell_center = origin + new float3(
                         (i + 0.5f) * cs,
@@ -173,7 +173,45 @@ namespace ECSExample
                 obs_datas.Dispose();
             }
 
-            Debug.Log($"[FlowFieldDebug] 网格={gw}x{gh} cell={cs}m 箭头={arrow_drawn} 障碍物={obs_drawn}");
+            // ── 5. 绘制被静态障碍阻挡的格子（红色 × 标记） ──
+            int blocked_drawn = 0;
+            if (SystemAPI.HasBuffer<FlowFieldBlockedBuffer>(singleton_entity))
+            {
+                var blocked_buffer = SystemAPI.GetBuffer<FlowFieldBlockedBuffer>(singleton_entity);
+
+                for (int j = 0; j < gh && blocked_drawn < max_arrows; j++)
+                {
+                    for (int i = 0; i < gw && blocked_drawn < max_arrows; i++)
+                    {
+                        int index = j * gw + i;
+                        if (index >= blocked_buffer.Length) break;
+                        if (!blocked_buffer[index].blocked) continue;
+
+                        float3 cell_center = origin + new float3(
+                            (i + 0.5f) * cs,
+                            GRID_Y + 0.03f,
+                            (j + 0.5f) * cs
+                        );
+
+                        float mark_size = cs * 0.3f;
+                        var blocked_color = new Color(1f, 0.2f, 0.1f, 0.6f);
+
+                        // × 标记
+                        Debug.DrawLine(
+                            cell_center + new float3(-mark_size, 0, -mark_size),
+                            cell_center + new float3(mark_size, 0, mark_size),
+                            blocked_color);
+                        Debug.DrawLine(
+                            cell_center + new float3(mark_size, 0, -mark_size),
+                            cell_center + new float3(-mark_size, 0, mark_size),
+                            blocked_color);
+
+                        blocked_drawn++;
+                    }
+                }
+            }
+
+            //Debug.Log($"[FlowFieldDebug] 网格={gw}x{gh} cell={cs}m 箭头={arrow_drawn} 障碍物={obs_drawn} 阻挡格={blocked_drawn}");
         }
 
         // ──────────────── 工具方法 ────────────────
