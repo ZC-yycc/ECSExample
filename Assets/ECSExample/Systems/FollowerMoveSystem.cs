@@ -10,7 +10,7 @@ using Unity.Collections.LowLevel.Unsafe;
 namespace ECSExample
 {
     /// <summary>
-    /// Follower 移动系统：流场方向 + 空间哈希分离 + 到达减速
+    /// Follower 移动系统：流场方向 + 空间哈希分离 + 障碍物避让 + 到达减速
     /// </summary>
     [UpdateInGroup(typeof(SimulationSystemGroup))]
     [UpdateAfter(typeof(FlowFieldBuildSystem))]
@@ -19,6 +19,7 @@ namespace ECSExample
         private EntityQuery                     config_query;
         private EntityQuery                     follower_query;
         private EntityQuery                     player_query;
+        private EntityQuery                     obstacle_query;
                     
         // 分离参数                 
         private const float                     MIN_SEPARATION = 3.0f;      // 最小间距
@@ -27,6 +28,11 @@ namespace ECSExample
         private const float                     SLOW_RADIUS = 4.0f;          // 到达减速半径
         private const float                     STOP_RADIUS = 2.0f;          // 停止半径
         private const float                     MAX_SPEED = 8f;              // 最大速度限制
+
+        // 障碍物避让参数
+        private const float                     OBSTACLE_CELL = 2.0f;        // 障碍物空间哈希格子大小
+        private const float                     OBSTACLE_AVOID_MARGIN = 2.0f; // 障碍物避让检测边距
+        private const float                     OBSTACLE_AVOID_WEIGHT = 6.0f; // 障碍物避让力全局权重
 
         public void OnCreate(ref SystemState state)
         {
@@ -39,6 +45,9 @@ namespace ECSExample
                 .Build();
             player_query = SystemAPI.QueryBuilder()
                 .WithAll<PlayerTag, LocalTransform>()
+                .Build();
+            obstacle_query = SystemAPI.QueryBuilder()
+                .WithAll<ObstacleTag, ObstacleData, LocalTransform>()
                 .Build();
             state.RequireForUpdate(config_query);
             state.RequireForUpdate(follower_query);
@@ -76,17 +85,42 @@ namespace ECSExample
             };
             var fill_handle = fill_job.ScheduleParallel(follower_query, state.Dependency);
 
+            // ── 构建障碍物空间哈希 ──
+            int obs_grid_width = math.max(1, (int)(config.grid_width * config.cell_size / OBSTACLE_CELL));
+            int obs_grid_height = math.max(1, (int)(config.grid_height * config.cell_size / OBSTACLE_CELL));
+            int obstacle_count = obstacle_query.CalculateEntityCount();
+            var obstacle_grid = new NativeParallelMultiHashMap<int, Entity>(
+                math.max(1, obstacle_count), Allocator.TempJob);
+
+            JobHandle obs_fill_handle = fill_handle;  // 默认无依赖
+            if (obstacle_count > 0)
+            {
+                var obs_fill_job = new BuildObstacleHashJob
+                {
+                    grid_writer = obstacle_grid.AsParallelWriter(),
+                    cell_size = OBSTACLE_CELL,
+                    grid_width = obs_grid_width,
+                    grid_height = obs_grid_height,
+                    grid_origin = config.grid_origin
+                };
+                obs_fill_handle = obs_fill_job.ScheduleParallel(obstacle_query, fill_handle);
+            }
+
             // ── 流场 Buffer ──
             var singleton_entity = SystemAPI.GetSingletonEntity<FlowFieldGridConfig>();
             var cell_buffer = SystemAPI.GetBuffer<FlowFieldCellBuffer>(singleton_entity);
             var transform_lookup = SystemAPI.GetComponentLookup<LocalTransform>(true);
 
             // ── 移动 Job ──
+            var obstacle_data_lookup = SystemAPI.GetComponentLookup<ObstacleData>(true);
+
             var move_job = new FollowerMoveJob
             {
                 spatial_grid = spatial_grid,
                 transform_lookup = transform_lookup,
                 cell_buffer = cell_buffer.AsNativeArray(),
+                obstacle_grid = obstacle_grid,
+                obstacle_data_lookup = obstacle_data_lookup,
                 flow_grid_width = config.grid_width,
                 flow_grid_height = config.grid_height,
                 flow_cell_size = config.cell_size,
@@ -97,17 +131,24 @@ namespace ECSExample
                 sep_grid_origin = config.grid_origin,
                 min_separation = MIN_SEPARATION,
                 separation_weight = SEPARATION_WEIGHT,
+                obs_cell_size = OBSTACLE_CELL,
+                obs_grid_width = obs_grid_width,
+                obs_grid_height = obs_grid_height,
+                obs_grid_origin = config.grid_origin,
+                obstacle_avoid_margin = OBSTACLE_AVOID_MARGIN,
+                obstacle_avoid_weight = OBSTACLE_AVOID_WEIGHT,
                 slow_radius = SLOW_RADIUS,
                 stop_radius = STOP_RADIUS,
                 max_speed = MAX_SPEED,
                 player_position = player_pos,
                 delta_time = SystemAPI.Time.DeltaTime
             };
-            var move_handle = move_job.ScheduleParallel(follower_query, fill_handle);
+            var move_handle = move_job.ScheduleParallel(follower_query, obs_fill_handle);
 
             // ── 合并 + 清理 ──
             var combined = JobHandle.CombineDependencies(fill_handle, move_handle);
             state.Dependency = spatial_grid.Dispose(combined);
+            state.Dependency = obstacle_grid.Dispose(state.Dependency);
         }
     }
 
@@ -131,14 +172,37 @@ namespace ECSExample
         }
     }
 
-    // ──────────────── 移动 + 分离 Job ────────────────
+    // ──────────────── 障碍物空间哈希构建 Job ────────────────
+    [BurstCompile]
+    public partial struct BuildObstacleHashJob : IJobEntity
+    {
+        public NativeParallelMultiHashMap<int, Entity>.ParallelWriter grid_writer;
+        public float                            cell_size;
+        public int                              grid_width;
+        public int                              grid_height;
+        public float3                           grid_origin;
+
+        public void Execute(Entity entity, in LocalTransform transform, in ObstacleTag tag)
+        {
+            float3 relative = transform.Position - grid_origin;
+            int cx = math.clamp((int)(relative.x / cell_size), 0, grid_width - 1);
+            int cz = math.clamp((int)(relative.z / cell_size), 0, grid_height - 1);
+            int key = cz * grid_width + cx;
+            grid_writer.Add(key, entity);
+        }
+    }
+
+    // ──────────────── 移动 + 分离 + 避让 Job ────────────────
     [BurstCompile]
     public partial struct FollowerMoveJob : IJobEntity
     {
         [ReadOnly] public NativeParallelMultiHashMap<int, Entity>           spatial_grid;
+        [ReadOnly] public NativeParallelMultiHashMap<int, Entity>           obstacle_grid;
 
         [ReadOnly, NativeDisableContainerSafetyRestriction]
         public ComponentLookup<LocalTransform>                              transform_lookup;
+        [ReadOnly, NativeDisableContainerSafetyRestriction]
+        public ComponentLookup<ObstacleData>                                obstacle_data_lookup;
         [ReadOnly] public NativeArray<FlowFieldCellBuffer>                  cell_buffer;
 
         // 流场参数
@@ -154,6 +218,14 @@ namespace ECSExample
         public float3                                   sep_grid_origin;
         public float                                    min_separation;
         public float                                    separation_weight;
+
+        // 障碍物避让参数
+        public float                                    obs_cell_size;
+        public int                                      obs_grid_width;
+        public int                                      obs_grid_height;
+        public float3                                   obs_grid_origin;
+        public float                                    obstacle_avoid_margin;
+        public float                                    obstacle_avoid_weight;
 
         // 减速参数
         public float                                    slow_radius;
@@ -233,8 +305,50 @@ namespace ECSExample
                 separation /= neighbor_count;
             }
 
-            // ── 3. 合成为最终方向 ──
-            float3 final_dir = move_dir + separation * separation_weight;
+            // ── 3. 障碍物避让力 ──
+            float3 obstacle_avoidance = float3.zero;
+            int my_obs_cx = math.clamp((int)((my_pos.x - obs_grid_origin.x) / obs_cell_size), 0, obs_grid_width - 1);
+            int my_obs_cz = math.clamp((int)((my_pos.z - obs_grid_origin.z) / obs_cell_size), 0, obs_grid_height - 1);
+            int obs_checked = 0;
+            const int MAX_OBS_CHECKS = 30;
+
+            for (int dx = -1; dx <= 1; dx++)
+            {
+                for (int dz = -1; dz <= 1; dz++)
+                {
+                    int nx = my_obs_cx + dx;
+                    int nz = my_obs_cz + dz;
+                    if (nx < 0 || nx >= obs_grid_width || nz < 0 || nz >= obs_grid_height) continue;
+
+                    int key = nz * obs_grid_width + nx;
+                    if (!obstacle_grid.TryGetFirstValue(key, out Entity obs, out var obs_iter)) continue;
+
+                    do
+                    {
+                        if (obs_checked++ >= MAX_OBS_CHECKS) break;
+
+                        if (!obstacle_data_lookup.TryGetComponent(obs, out ObstacleData obs_data))
+                            continue;
+                        if (!transform_lookup.TryGetComponent(obs, out LocalTransform obs_transform))
+                            continue;
+
+                        float3 to_obstacle = obs_transform.Position - my_pos;
+                        float dist = math.length(to_obstacle);
+                        float avoid_dist = obs_data.radius + obstacle_avoid_margin;
+
+                        if (dist < avoid_dist && dist > 0.00001f)
+                        {
+                            float3 away_dir = -to_obstacle / dist;  // 远离障碍物
+                            float strength = (avoid_dist - dist) / avoid_dist;  // 越近越强
+                            obstacle_avoidance += away_dir * strength * obs_data.avoidance_weight;
+                        }
+                    }
+                    while (obstacle_grid.TryGetNextValue(out obs, ref obs_iter));
+                }
+            }
+
+            // ── 4. 合成为最终方向 ──
+            float3 final_dir = move_dir + separation * separation_weight + obstacle_avoidance * obstacle_avoid_weight;
             float dir_length = math.length(final_dir);
             if (dir_length > 0.0001f)
             {
@@ -245,7 +359,7 @@ namespace ECSExample
                 final_dir = move_dir;  // 分离力为0时回到流场方向
             }
 
-            // ── 4. 到达减速 ──
+            // ── 5. 到达减速 ──
             float dist_to_player = math.distance(my_pos, player_position);
             float speed_multiplier = math.saturate(dist_to_player / slow_radius);
             // 确保最小速度（不完全停住）
@@ -253,7 +367,7 @@ namespace ECSExample
 
             float speed = math.min(follower.move_speed * speed_multiplier, max_speed);
 
-            // ── 5. 应用移动 ──
+            // ── 6. 应用移动 ──
             float3 new_pos = my_pos + final_dir * speed * delta_time;
             transform.Position = new_pos;
         }

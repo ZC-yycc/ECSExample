@@ -43,6 +43,7 @@
 .vs/
 .vscode/
 .deepseek/
+.reasoinx/
 
 # Gradle cache directory
 .gradle/
